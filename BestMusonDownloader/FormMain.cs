@@ -50,6 +50,19 @@ namespace BestMusonDownloader
         private List<SongInfo> songs = new List<SongInfo>();
         private string directory = "Best-muzon rock";
         private ActionKind actionKind = ActionKind.LoadMainPage;
+        private KnownColor[] knownColors = (KnownColor[])Enum.GetValues(typeof(KnownColor));
+        private int knownColorIndex = 0;
+
+        private Color GetNextKnownColor()
+        {
+            if (knownColorIndex >= knownColors.Length)
+                knownColorIndex = 0;
+
+            Color nextColor = Color.FromKnownColor(knownColors[knownColorIndex]);
+            knownColorIndex++;
+            Console.WriteLine("Current known color: " + knownColors[knownColorIndex].ToString());
+            return nextColor;
+        }
 
         public FormMain()
         {
@@ -82,6 +95,9 @@ namespace BestMusonDownloader
         {
             using (WebClient client = new WebClient())
             {
+                prBarSong.Text = "";
+                oldBytesReceived = 0;
+                oldDateTimeBytesReceived = DateTime.Now;
                 client.DownloadProgressChanged += Client_DownloadProgressChanged;
 
                 Task task = client.DownloadFileTaskAsync(link, fileName);
@@ -96,35 +112,31 @@ namespace BestMusonDownloader
         private void Client_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e)
         {
             DateTime now = DateTime.Now;
+            TimeSpan tsCheck = now - oldDateTimeBytesReceived;
 
-            if (e.ProgressPercentage > 0)
+            if (tsCheck.TotalSeconds >= 0.5)
             {
-                TimeSpan ts = now - oldDateTimeBytesReceived;
                 long progDiff = e.BytesReceived - oldBytesReceived;
 
-                double speed = progDiff / ts.TotalSeconds;
+                double speed = progDiff / tsCheck.TotalSeconds;
                 double speedKByte = speed / 1_000;
                 double speedMByte = speed / 1_000_000;
                 string speedStr = "";
 
-                if (double.IsInfinity(speed) || double.IsNaN(speed))
-                    speedStr = "";
+                if (double.IsInfinity(speed) || double.IsNaN(speed) || speed < 1)
+                    speedStr = "(- байт/сек)";
                 else if (speedMByte > 1)
-                    speedStr = $"({speedMByte.ToString("F3")} Мбайт/сек)";
+                    speedStr = $"({speedMByte.ToString("F2")} Мбайт/сек)";
                 else if (speedKByte > 1)
-                    speedStr = $"({speedKByte.ToString("F3")} Кбайт/сек)";
+                    speedStr = $"({speedKByte.ToString("F0")} Кбайт/сек)";
                 else
-                    speedStr = $"({speed.ToString("F3")} байт/сек)";
+                    speedStr = $"({speed.ToString("F0")} байт/сек)";
 
                 prBarSong.Text = speedStr;
-            }
-            else
-            {
-                prBarSong.Text = "";
-            }
 
-            oldBytesReceived = e.BytesReceived;
-            oldDateTimeBytesReceived = now;
+                oldBytesReceived = e.BytesReceived;
+                oldDateTimeBytesReceived = now;
+            }
 
             prBarSong.Value = e.ProgressPercentage;
         }
@@ -302,29 +314,75 @@ namespace BestMusonDownloader
                         }
                         else
                         {
-                            DateTime startSongLoadTime = DateTime.Now;
+                            string status = null;
                             string link = GetDownloadLink();
-                            Task task = DownloadFile(link, name);
-                            await task; // main page - 12
 
-                            string status;
-                            if (task.IsFaulted) status = "Faulted";
-                            else if (task.IsCanceled) status = "Canceled";
-                            else status = "Completed";
+                            if (link == null)
+                            {
+                                nextSong--;
+                            }
+                            else
+                            {
+                                try
+                                {
+                                    DateTime startSongLoadTime = DateTime.Now;
+                                    Task task = DownloadFile(link, name);
+                                    await task; // main page - 12
 
-                            TimeSpan songLoadTime = DateTime.Now - startSongLoadTime;
-                            string info =
-                                $"[{DateTime.Now}] [{song.FullName}] [{status}]\r\n" +
-                                $"Load song time: {songLoadTime.ToString()}\r\n";
+                                    if (task.IsFaulted) status = "Faulted";
+                                    else if (task.IsCanceled) status = "Canceled";
+                                    else status = "Completed";
 
-                            SetText(info);
-                            Console.WriteLine(info);
+                                    TimeSpan songLoadTime = DateTime.Now - startSongLoadTime;
+                                    string info =
+                                        $"[{DateTime.Now}] [{song.FullName}] [{status}]\r\n" +
+                                        $"Load song time: {songLoadTime.ToString()}\r\n";
+
+                                    SetText(info);
+                                    Console.WriteLine(info);
+                                }
+                                catch (Exception exc)
+                                {
+                                    SetText(exc.Message + Environment.NewLine);
+                                    nextSong--;
+
+                                    if (status == null || status != "Completed")
+                                    {
+                                        if (File.Exists(name))
+                                        {
+                                            try
+                                            {
+                                                File.Delete(name);
+                                            }
+                                            catch (Exception exc2)
+                                            {
+                                                SetText(exc2.Message + Environment.NewLine);
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (status == null || status != "Completed")
+                            {
+                                int maxLoop = 200;
+                                int loop = 0;
+
+                                while (!ConnectionAvailable("http://www.google.com/"))
+                                {
+                                    await Task.Delay(1000);
+
+                                    loop++;
+                                    if (loop > maxLoop) actionKind = ActionKind.StopLoad;
+                                    if (actionKind == ActionKind.StopLoad) break;
+                                }
+                            }
                         }
 
-                        prBarSong.Value = 0;
-                        prBarAllSongs.Value++;
-
                         nextSong++;
+
+                        prBarSong.Value = 0;
+                        prBarAllSongs.Value = nextSong;
 
                         if (nextSong >= songs.Count)
                         {
@@ -339,13 +397,22 @@ namespace BestMusonDownloader
                             break;
                         }
 
+                        prBarSong.ForeColor = GetNextKnownColor();
                         listBoxSongs.SelectedIndex = nextSong;
                         int topIndex = nextSong - 2;
                         if (topIndex < 0) topIndex = 0;
                         listBoxSongs.TopIndex = topIndex;
 
-                        actionKind = ActionKind.LoadDownloadPage;
-                        GoToDownloadPage(nextSong);
+                        if (actionKind != ActionKind.StopLoad)
+                        {
+                            actionKind = ActionKind.LoadDownloadPage;
+                            GoToDownloadPage(nextSong);
+                        }
+                        else
+                        {
+                            webBrowser.DocumentCompleted -= WebBrowser_DocumentCompleted;
+                            SetControlsEnabled(true);
+                        }
                     }
                     break;
             }
@@ -383,5 +450,33 @@ namespace BestMusonDownloader
             actionKind = ActionKind.StopLoad;
             //buttonStop.Enabled = false;
         }
+
+        public bool ConnectionAvailable(string strServer)
+        {
+            try
+            {
+                HttpWebRequest reqFP = (HttpWebRequest)WebRequest.Create(strServer);
+
+                HttpWebResponse rspFP = (HttpWebResponse)reqFP.GetResponse();
+                if (HttpStatusCode.OK == rspFP.StatusCode)
+                {
+                    // HTTP = 200 - Интернет безусловно есть! 
+                    rspFP.Close();
+                    return true;
+                }
+                else
+                {
+                    // сервер вернул отрицательный ответ, возможно что инета нет
+                    rspFP.Close();
+                    return false;
+                }
+            }
+            catch (WebException)
+            {
+                // Ошибка, значит интернета у нас нет. Плачем :'(
+                return false;
+            }
+        }
+
     }
 }
