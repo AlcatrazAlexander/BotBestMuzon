@@ -16,9 +16,11 @@ namespace BestMusonDownloader
         private Label _label;
 
         private int _mimimum;
-        private int _maximum;
+        private int _maximum = 100;
         private int _value;
         private bool _usePercentage;
+        private string _text = "";
+        private bool _useText;
 
         [Browsable(true)]
         [DefaultValue(0)]
@@ -100,6 +102,36 @@ namespace BestMusonDownloader
             }
         }
 
+        [Browsable(true)]
+        [DefaultValue("")]
+        public override string Text
+        {
+            get => _text;
+            set
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    value = "";
+                if (_text == value) return;
+
+                _text = value;
+                SetLabelText();
+            }
+        }
+
+        [Browsable(true)]
+        [DefaultValue(false)]
+        public bool UseText
+        {
+            get => _useText;
+            set
+            {
+                if (_useText == value) return;
+
+                _useText = value;
+                SetLabelText();
+            }
+        }
+
         public ProggressBarWithLabel()
             : base()
         {
@@ -108,6 +140,7 @@ namespace BestMusonDownloader
             _label.ForeColor = Color.Black;
             this.ForeColor = SystemColors.Highlight;
             _label.SizeChanged += _label_SizeChanged;
+
             SetLabelText();
         }
 
@@ -166,10 +199,17 @@ namespace BestMusonDownloader
 
         private void SetLabelText()
         {
+            string labelText = "";
+
             if (_usePercentage)
-                _label.Text = $"{_value}%";
+                labelText = $"{_value}%";
             else
-                _label.Text = $"{_value}/{_maximum}";
+                labelText = $"{_value}/{_maximum}";
+
+            if (_useText && _text.Length > 0)
+                labelText += $" {_text}";
+
+            _label.Text = labelText;
         }
 
         private void SetLabelLocation()
