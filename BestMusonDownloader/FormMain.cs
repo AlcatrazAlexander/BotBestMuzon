@@ -54,17 +54,19 @@ namespace BestMusonDownloader
         public FormMain()
         {
             InitializeComponent();
-            webBrowser.ScriptErrorsSuppressed = true;
 
             Directory.CreateDirectory(directory);
+
+            webBrowser.ScriptErrorsSuppressed = true;
             prBarSong.UsePercentage = true;
+            prBarSong.UseText = true;
             listBoxSongs.ScrollAlwaysVisible = true;
         }
 
         private void SetMainPage(int number)
         {
             nextMainPage = number;
-            numericUpDown1.Value = number;
+            numericUpDownMainPage.Value = number;
             currMainPage = mainPage + number.ToString() + "/";
         }
 
@@ -88,8 +90,42 @@ namespace BestMusonDownloader
             }
         }
 
+        private long oldBytesReceived;
+        private DateTime oldDateTimeBytesReceived;
+
         private void Client_DownloadProgressChanged(object sender, DownloadProgressChangedEventArgs e)
         {
+            DateTime now = DateTime.Now;
+
+            if (e.ProgressPercentage > 0)
+            {
+                TimeSpan ts = now - oldDateTimeBytesReceived;
+                long progDiff = e.BytesReceived - oldBytesReceived;
+
+                double speed = progDiff / ts.TotalSeconds;
+                double speedKByte = speed / 1_000;
+                double speedMByte = speed / 1_000_000;
+                string speedStr = "";
+
+                if (double.IsInfinity(speed) || double.IsNaN(speed))
+                    speedStr = "";
+                else if (speedMByte > 1)
+                    speedStr = $"({speedMByte.ToString("F3")} Мбайт/сек)";
+                else if (speedKByte > 1)
+                    speedStr = $"({speedKByte.ToString("F3")} Кбайт/сек)";
+                else
+                    speedStr = $"({speed.ToString("F3")} байт/сек)";
+
+                prBarSong.Text = speedStr;
+            }
+            else
+            {
+                prBarSong.Text = "";
+            }
+
+            oldBytesReceived = e.BytesReceived;
+            oldDateTimeBytesReceived = now;
+
             prBarSong.Value = e.ProgressPercentage;
         }
 
@@ -239,7 +275,23 @@ namespace BestMusonDownloader
                         actionKind = ActionKind.LoadBusy;
                         SongInfo song = songs[nextSong];
 
-                        string name = Path.Combine(directory, song.FullName + ".mp3");
+                        string songName = song.FullName;
+
+                        char[] invalid = Path.GetInvalidFileNameChars();
+
+                        var check = songName.Where(c => invalid.Contains(c)).ToList();
+
+                        if (check.Count > 0)
+                        {
+                            for (int i = 0; i < check.Count; i++)
+                            {
+                                char c = check[i];
+
+                                songName = songName.Replace(c, '_');
+                            }
+                        }
+
+                        string name = Path.Combine(directory, songName + ".mp3");
 
                         if (File.Exists(name))
                         {
@@ -252,9 +304,8 @@ namespace BestMusonDownloader
                         {
                             DateTime startSongLoadTime = DateTime.Now;
                             string link = GetDownloadLink();
-
                             Task task = DownloadFile(link, name);
-                            await task;
+                            await task; // main page - 12
 
                             string status;
                             if (task.IsFaulted) status = "Faulted";
@@ -315,7 +366,7 @@ namespace BestMusonDownloader
 
         private void ButtonSetMainPage_Click(object sender, EventArgs e)
         {
-            SetMainPage((int)numericUpDown1.Value);
+            SetMainPage((int)numericUpDownMainPage.Value);
             GoToMainPage();
         }
 
@@ -323,14 +374,14 @@ namespace BestMusonDownloader
         {
             buttonBotStart.Enabled = enabled;
             buttonSetMainPage.Enabled = enabled;
-            numericUpDown1.Enabled = enabled;
+            numericUpDownMainPage.Enabled = enabled;
             buttonStop.Enabled = !enabled;
         }
 
         private void buttonStop_Click(object sender, EventArgs e)
         {
             actionKind = ActionKind.StopLoad;
-            buttonStop.Enabled = false;
+            //buttonStop.Enabled = false;
         }
     }
 }
