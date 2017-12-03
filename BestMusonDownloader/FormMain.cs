@@ -50,17 +50,20 @@ namespace BestMusonDownloader
         private List<SongInfo> songs = new List<SongInfo>();
         private string directory = "Best-muzon rock";
         private ActionKind actionKind = ActionKind.LoadMainPage;
-        private KnownColor[] knownColors = (KnownColor[])Enum.GetValues(typeof(KnownColor));
+        private KnownColor[] knownColors;
         private int knownColorIndex = 0;
 
         private Color GetNextKnownColor()
         {
             if (knownColorIndex >= knownColors.Length)
                 knownColorIndex = 0;
-
+            
             Color nextColor = Color.FromKnownColor(knownColors[knownColorIndex]);
             knownColorIndex++;
-            Console.WriteLine("Current known color: " + knownColors[knownColorIndex].ToString());
+
+            Console.WriteLine("Current known color: " + nextColor.ToString());
+            Console.WriteLine("Next known color: " + Color.FromKnownColor(knownColors[knownColorIndex % knownColors.Length]).ToString());
+            
             return nextColor;
         }
 
@@ -74,6 +77,11 @@ namespace BestMusonDownloader
             prBarSong.UsePercentage = true;
             prBarSong.UseText = true;
             listBoxSongs.ScrollAlwaysVisible = true;
+
+            int colorCount = 174 - (7 + 27);
+            knownColors = new KnownColor[colorCount];
+            Array array = Enum.GetValues(typeof(KnownColor));
+            Array.Copy(array, 27, knownColors, 0, colorCount);
         }
 
         private void SetMainPage(int number)
@@ -307,7 +315,7 @@ namespace BestMusonDownloader
 
                         if (File.Exists(name))
                         {
-                            string result = $"[{DateTime.Now}] [{song.FullName}] [Existed]\r\n";
+                            string result = $"[{nextSong}] [{DateTime.Now}] [{song.FullName}] [Existed]\r\n";
 
                             SetText(result);
                             Console.WriteLine(result);
@@ -335,7 +343,7 @@ namespace BestMusonDownloader
 
                                     TimeSpan songLoadTime = DateTime.Now - startSongLoadTime;
                                     string info =
-                                        $"[{DateTime.Now}] [{song.FullName}] [{status}]\r\n" +
+                                        $"[{nextSong}] [{DateTime.Now}] [{song.FullName}] [{status}]\r\n" +
                                         $"Load song time: {songLoadTime.ToString()}\r\n";
 
                                     SetText(info);
