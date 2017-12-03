@@ -315,7 +315,7 @@ namespace BestMusonDownloader
 
                         if (File.Exists(name))
                         {
-                            string result = $"[{nextSong}] [{DateTime.Now}] [{song.FullName}] [Existed]\r\n";
+                            string result = $"[{nextSong + 1}] [{DateTime.Now}] [{song.FullName}] [Existed]\r\n";
 
                             SetText(result);
                             Console.WriteLine(result);
@@ -343,7 +343,7 @@ namespace BestMusonDownloader
 
                                     TimeSpan songLoadTime = DateTime.Now - startSongLoadTime;
                                     string info =
-                                        $"[{nextSong}] [{DateTime.Now}] [{song.FullName}] [{status}]\r\n" +
+                                        $"[{nextSong + 1}] [{DateTime.Now}] [{song.FullName}] [{status}]\r\n" +
                                         $"Load song time: {songLoadTime.ToString()}\r\n";
 
                                     SetText(info);
